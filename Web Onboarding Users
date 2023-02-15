@@ -1,0 +1,47 @@
+--After retrieval of phonenumbers from Amplitude--
+--population of web-registered users--
+drop table if exists #webregistered;
+select *
+into #webregistered
+from [User]
+where username IN ('XXXX')
+
+
+drop table if exists #acceptedAdvance;
+SELECT US.UserSubscriptionid as acceptedAdvance,
+MIN(AdvanceDate) as FirstAdvanceDate,
+MIN(UserCashAdvanceId) as FirstAdvanceId
+into #acceptedAdvance
+FROM UserSubscription US
+INNER JOIN UserCashAdvanceSubscription UCAS ON US.UserId=UCAS.UserId
+INNER JOIN UserCashAdvance UCA ON UCAS.UserCashAdvanceSubscriptionId=UCA.UserCashAdvanceSubscriptionid
+GROUP BY US.UserSubscriptionid;
+
+drop table if exists #lastAccessed
+select userid,max(DateAccessed) as lastAppOpen
+INTO #lastAccessed
+FROM AccessLog
+GROUP BY UserId
+
+Select a.userid,a.username,a.firstname,a.lastname,a.datecreated,
+b.subscriptiontype,b.startdate,b.subscriptionstatus,b.CreatedAt,
+C.*,
+D.lastAppOpen
+FROM #webregistered as A
+left join UserSubscription as B ON a.userid=b.userid
+LEFT JOIN #acceptedAdvance as C on B.UserSubscriptionid=C.acceptedAdvance
+LEFT JOIN #lastAccessed as D ON A.UserID=D.UserID
+
+
+--To compare to overall substatuses for subs created L7D--
+SELECT count(*) AS 'Total New Subs L7D',
+COUNT(CASE WHEN SubscriptionStatus=1 THEN 1 END) as 'Active',
+(SELECT COUNT(CASE WHEN SubscriptionStatus=1 THEN 1 END))*100/( COUNT(*)) as 'Active (%)',
+COUNT(CASE WHEN SubscriptionStatus=5 THEN 1 END) as 'Closed by User',
+(SELECT COUNT(CASE WHEN SubscriptionStatus=5 THEN 1 END))*100/( COUNT(*)) as 'Closed by User (%)',
+COUNT(CASE WHEN SubscriptionStatus=8 THEN 1 END) as 'Trial AutoClose',
+(SELECT COUNT(CASE WHEN SubscriptionStatus=8 THEN 5 END))*100/( COUNT(*)) as 'Trial AutoClose (%)',
+COUNT(CASE WHEN SubscriptionStatus=9 THEN 1 END) as 'Subscription Paused',
+(SELECT COUNT(CASE WHEN SubscriptionStatus=9 THEN 5 END))*(100)/( COUNT(*)) as 'Sub Paused (%)'
+FROM UserSubscription
+WHERE datediff(day,createdAt,GETDATE())<=7
