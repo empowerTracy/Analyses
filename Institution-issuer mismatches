@@ -1,4 +1,4 @@
---gets non-null pairings--
+--gets non-null pairings in L7D--
 SELECT
     Issuer,IA.name,-- IA.UserId
     COUNT(DISTINCT IA.UserId) as NumOccurrences,
@@ -10,6 +10,23 @@ WHERE SDA.Status <> 0 AND ID.IsActive=1
 AND DATEDIFF(day,SDA.CreatedAt,GETDATE())<7 AND ISSUER is not null
 GROUP BY Issuer,IA.name,Id.externalproviderid
 ORDER BY NumOccurrences desc;
+
+--pulls number of paired & non paired match count for specific institutions--
+SELECT 
+    Issuer,IA.name,
+    COUNT(DISTINCT IA.UserId) as 'paired'
+FROM StripeDebitAccounts SDA INNER JOIN Account A ON SDA.AccountId=A.AccountId
+INNER JOIN InstitutionAccount IA ON A.InstitutionAccountId=IA.InstitutionAccountId
+WHERE SDA.Status=0 AND DATEDIFF(hour,SDA.CreatedAt,GETDATE())<72 AND Ia.Name like '%venmo%'
+GROUP BY Issuer,IA.name;
+
+SELECT 
+    Issuer,IA.name,
+    COUNT(DISTINCT IA.UserId) as 'Not paired'
+FROM StripeDebitAccounts SDA INNER JOIN Account A ON SDA.AccountId=A.AccountId
+INNER JOIN InstitutionAccount IA ON A.InstitutionAccountId=IA.InstitutionAccountId
+WHERE SDA.Status<>0 AND DATEDIFF(hour,SDA.CreatedAt,GETDATE())<72 AND Ia.Name like '%venmo%'
+GROUP BY Issuer,IA.name;
 
 --pulls charcater strings associated with institutions--
 SELECT distinct [Name] FROM dbo.InstitutionAccount WHERE [Name] LIKE ('%Skylight%')
