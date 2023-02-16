@@ -1,0 +1,100 @@
+--includes Sub Start Date, Date CBE Updated, SubStatus, Sub ID #-- 
+drop table if exists #CBEUsersL30D;
+SELECT StartDate, ModifiedAt, US.UserId,SubscriptionType,SubscriptionStatus,UserSubscriptionId
+into #CBEUsersL30D
+FROM UserSubscription US
+WHERE SubscriptionStatus=6
+AND datediff(day,ModifiedAt,GETDATE())<=30;
+
+--Table 2: Subscription Invoice Info--
+drop table if exists #SubInvoicePop;
+SELECT CBE.UserID,US.UserSubscriptionId,US.UserSubscriptionInvoiceId,CBE.StartDate,CBE.ModifiedAt,CBE.SubscriptionType,US.InvoiceDate,US.InvoiceStatus,US.Attempts,US.CollectionType
+INTO #SubInvoicePop
+FROM UserSubscriptionInvoice US
+RIGHT JOIN #CBEUsersL30D CBE ON CBE.UserSubscriptionId=US.UserSubscriptionId
+
+
+--Table 3: Part 1 of table creation--
+drop table if exists #basetable
+select UserId,
+UserSubscriptionId,
+count(usersubscriptioninvoiceId) as SubInvoicesCount,
+sum(Attempts) as AttemptsSum,
+MIN(UserSubscriptionInvoiceId) as FirstSubInvoice,
+MAX(UserSubscriptionInvoiceId) as LastSubInvoice,
+MAX(StartDate) as SubStartDate,
+MIN(InvoiceDate) as FirstInvoiceDate,
+MAX(InvoiceDate) as LastInvoiceDate,
+Max(modifiedat) as CBEDate,
+datediff(month,min(InvoiceDate),Max(ModifiedAt)) as SubLengthMonths,
+datediff(day,max(InvoiceDate),Max(ModifiedAt)) as DaystoCBE
+INTO #baseTable
+FROM #subinvoicepop
+group by UserID,usersubscriptionid
+
+
+--Table 4: Most Recent Sub Invoice Info--
+drop table if exists #lastSub;
+select userid,max(UserSubscriptionInvoiceId) as LastSubInvoice
+INTO #lastSub
+FROM #subinvoicepop
+group by userID
+
+--Table 5: Last Sub Invoice Info--
+drop table if exists #lastSubInvoice
+select a.UserId as UserId,a.LastSubInvoice as LastSubInvoice,b.CollectionType as MostRecentCollectionType,b.InvoiceStatus as MostRecentSubStatus
+into #lastSubInvoice
+from #lastsub as a
+inner join #SubInvoicePop as b ON a.LastSubInvoice=b.UserSubscriptionInvoiceId
+
+
+--Table 6a-c: counting # of invoice statuses for each subId--
+--2=Settled,3=Overdue,6=Unpaid--
+drop table if exists #SettledInvoices
+SELECT UserId,UserSubscriptionId,count(InvoiceStatus) as NumSettledInvoices
+Into #SettledInvoices
+FROM #SubInvoicePop
+WHERE InvoiceStatus=2
+Group by userid,usersubscriptionid
+
+drop table if exists #OverdueInvoices
+SELECT UserId,UserSubscriptionId,count(InvoiceStatus) as NumOverdueInvoices
+Into #OverdueInvoices
+FROM #SubInvoicePop
+WHERE InvoiceStatus=3
+Group by userid,usersubscriptionid
+
+drop table if exists #UnpaidInvoices
+SELECT UserId,UserSubscriptionId,count(InvoiceStatus) as NumUnpaidInvoices
+Into #UnpaidInvoices
+FROM #SubInvoicePop
+WHERE InvoiceStatus=6
+Group by userid,usersubscriptionid
+
+drop table if exists #InvoiceStatusCounts
+SELECT Z.UserId,Z.UserSubscriptionId,c.NumSettledInvoices,b.NumOverdueInvoices,a.NumUnpaidInvoices
+INTO #InvoiceStatusCounts
+FROM #CBEUsersL30D as Z
+LEFT JOIN #UnpaidInvoices as A ON z.userid=a.userid
+LEFT JOIN #OverdueInvoices as b ON a.usersubscriptionid=b.usersubscriptionid
+LEFT JOIN #SettledInvoices as c ON b.usersubscriptionid=c.usersubscriptionid
+
+--FINAL: creating mega table--
+--STEPS: joining table 3 basetable to table 5 invoicestatuscounts invoice status counts--
+select a.UserId,
+a.UserSubscriptionId,
+a.SubInvoicesCount as 'Sub Invoices (#)',
+a.AttemptsSum as 'Collection Attempts (#)',
+a.SubStartDate as 'Sub Start Date',
+a.FirstSubInvoice as 'First Sub Invoice',
+a.LastSubInvoice as 'Last Sub Invoice',
+a.FirstInvoiceDate as 'First Invoice Date',
+a.LastInvoiceDate as 'Last Invoice Date',
+a.CBEDate as 'CBE Date',
+a.SubLengthMonths as 'Sub duration (Mos.)',
+a.DaystoCBE as 'Days to CBE',
+b.NumSettledInvoices as 'Settled Inv (#)',
+b.NumOverdueInvoices as 'Overdue Inv (#)',
+b.NumUnpaidInvoices as 'Unpaid Inv (#)'
+FROM #basetable as a
+INNER JOIN #InvoiceStatusCounts as b ON a.UserId=b.UserId
