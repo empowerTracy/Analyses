@@ -1,0 +1,21 @@
+--gets non-null pairings--
+SELECT
+    Issuer,IA.name,-- IA.UserId
+    COUNT(DISTINCT IA.UserId) as NumOccurrences,
+    ID.ExternalProviderId
+FROM StripeDebitAccounts SDA INNER JOIN Account A ON SDA.AccountId=A.AccountId
+INNER JOIN InstitutionAccount IA ON A.InstitutionAccountId=IA.InstitutionAccountId
+INNER JOIN Institution ID ON IA.Name=ID.Name
+WHERE SDA.Status <> 0 AND ID.IsActive=1 
+AND DATEDIFF(day,SDA.CreatedAt,GETDATE())<7 AND ISSUER is not null
+GROUP BY Issuer,IA.name,Id.externalproviderid
+ORDER BY NumOccurrences desc;
+
+--pulls charcater strings associated with institutions--
+SELECT distinct [Name] FROM dbo.InstitutionAccount WHERE [Name] LIKE ('%Skylight%')
+SELECT distinct [Name] FROM dbo.InstitutionAccount WHERE [Name] LIKE '%Chime%'
+
+
+--pulls active external provider ID--
+SELECT [Name], ExternalProviderId, IsActive FROM dbo.Institution  WHERE IsActive<>0 AND [Name] LIKE '%Skylight%'
+SELECT [Name], ExternalProviderId, IsActive FROM dbo.Institution  WHERE IsActive<>0 AND [Name] LIKE '%Chime%'
