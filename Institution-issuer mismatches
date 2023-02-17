@@ -36,3 +36,18 @@ SELECT distinct [Name] FROM dbo.InstitutionAccount WHERE [Name] LIKE '%Chime%'
 --pulls active external provider ID--
 SELECT [Name], ExternalProviderId, IsActive FROM dbo.Institution  WHERE IsActive<>0 AND [Name] LIKE '%Skylight%'
 SELECT [Name], ExternalProviderId, IsActive FROM dbo.Institution  WHERE IsActive<>0 AND [Name] LIKE '%Chime%'
+
+--To get specific userID and AccountID info, which can be xref'd with Stripe--
+SELECT
+    SDA.AccountId,USA.UserId,Issuer,IA.name,-- IA.UserId
+    COUNT(DISTINCT IA.UserId) as NumOccurrences,
+    ID.ExternalProviderId
+FROM StripeDebitAccounts SDA INNER JOIN Account A ON SDA.AccountId=A.AccountId
+INNER JOIN InstitutionAccount IA ON A.InstitutionAccountId=IA.InstitutionAccountId
+INNER JOIN Institution ID ON IA.Name=ID.Name
+LEFT JOIN UserStripeAccounts USA ON USA.UserId=IA.UserId
+WHERE SDA.Status <> 0 AND ID.IsActive=1 
+AND DATEDIFF(hour,SDA.CreatedAt,GETDATE())<1 AND ISSUER is not null
+GROUP BY SDA.accountid,USA.UserID,Issuer,IA.name,Id.externalproviderid
+ORDER BY NumOccurrences desc;
+
