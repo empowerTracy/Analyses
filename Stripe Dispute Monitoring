@@ -1,0 +1,41 @@
+drop table if exists #receivedCard;
+SELECT US.UserId as received156,MAX(UC.DateGenerated) AS LastGenerated
+into #receivedCard
+FROM UserSubscription US
+INNER JOIN UserCard UC ON US.UserId=UC.userId
+WHERE CardType=156
+GROUP BY US.Userid;
+
+--Initial check with card info--
+--663 and on is when the Iterable should trigger--
+SELECT SD.*, UCAS.UserID,STx.Status,B.received156,B.LastGenerated
+FROM StripeDispute SD
+INNER JOIN UserCashAdvanceStripeTransactions UCAST ON (UCAST.StripeTransactionID=SD.StripeTransactionID)
+INNER JOIN UserCashAdvance UCA ON (UCA.UserCashAdvanceID=UCAST.UserCashAdvanceID)
+INNER JOIN UserCashAdvanceSubscription UCAS ON (UCAS.MonitoringAccountID=UCA.AccountID)
+inner join stripetransactions STx ON STx.StripeTransactionId=SD.StripeTransactionID
+LEFT JOIN #receivedCard as B on UCAS.Userid=B.received156
+WHERE SD.StripeDisputeID >='659'
+order by stripedisputeid asc
+
+
+--faster query for just remediations--
+SELECT SD.*, UCAS.UserID,STx.Status
+FROM StripeDispute SD
+INNER JOIN UserCashAdvanceStripeTransactions UCAST ON (UCAST.StripeTransactionID=SD.StripeTransactionID)
+INNER JOIN UserCashAdvance UCA ON (UCA.UserCashAdvanceID=UCAST.UserCashAdvanceID)
+INNER JOIN UserCashAdvanceSubscription UCAS ON (UCAS.MonitoringAccountID=UCA.AccountID)
+inner join stripetransactions STx ON STx.StripeTransactionId=SD.StripeTransactionID
+WHERE SD.StripeDisputeID >='659' and DisputeStatus=1
+order by stripedisputeid asc
+
+--faster query for just disputes--
+SELECT SD.*, UCAS.UserID,STx.Status
+FROM StripeDispute SD
+INNER JOIN UserCashAdvanceStripeTransactions UCAST ON (UCAST.StripeTransactionID=SD.StripeTransactionID)
+INNER JOIN UserCashAdvance UCA ON (UCA.UserCashAdvanceID=UCAST.UserCashAdvanceID)
+INNER JOIN UserCashAdvanceSubscription UCAS ON (UCAS.MonitoringAccountID=UCA.AccountID)
+inner join stripetransactions STx ON STx.StripeTransactionId=SD.StripeTransactionID
+WHERE SD.StripeDisputeID >='659' and DisputeStatus<>1
+order by stripedisputeid asc
+
