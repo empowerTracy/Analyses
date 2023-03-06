@@ -1,0 +1,27 @@
+drop table if exists #recent_advances
+select
+a.UserCashAdvanceId, c.UserId, Amount, AdvanceDate, c.UserCreditVariableId
+INTO #recent_advances
+from UserCashAdvance a
+left join UserCashAdvanceCreditVariable b
+on a.UserCashAdvanceId = b.UserCashAdvanceId
+left join UserCreditVariable c
+on b.UserCreditVariableId = c.UserCreditVariableId
+where AdvanceDate > '2022-02-01';
+
+--drop table #eligibility; joins to UCAE table and filters for just offers shown to users
+select a.*, AmountEligible, IsOfferShownToUser,
+row_number() over(partition by b.UserCreditVariableId order by EligibilityCreatedAt desc) as row_num
+INTO #eligibility
+from #recent_advances a
+left join UserCashAdvanceEligibility b
+on a.UserCreditVariableId = b.UserCreditVariableId
+where IsOfferShownToUser = 1;
+
+--drop table #eligibility2
+select * INTO #eligibility2 from #eligibility where row_num = 1;
+--combined and breaks users into summary table with test & control group classification--
+select case when UserId%10 = 0 then 'test' else 'control' end as TestGroup,
+Amount, AmountEligible, count(*)
+from #eligibility2
+group by case when UserId%10 = 0 then 'test' else 'control' end, Amount, AmountEligible
