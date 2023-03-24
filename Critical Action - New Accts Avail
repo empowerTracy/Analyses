@@ -1,0 +1,77 @@
+drop table if exists #NewAccountsAvail
+select * 
+into #NewAccountsAvail
+from institutionaccount where loadstatus=5
+
+-- for user emails--
+select A.UserId,B.EmailAddress
+FROM #NewAccountsAvail as A
+LEFT JOIN UserEmails as B ON A.UserId=B.UserId
+
+--getting most recent sub--
+drop table if exists #mostrecentSub;
+SELECT UserID, MAX(UserSubscriptionId) AS RecentSubId
+into #mostRecentSub
+FROM UserSubscription 
+WHERE UserID IN (SELECT UserID FROM #NewAccountsAvail)
+GROUP BY UserID
+
+drop table if exists #recentSub
+select A.*, B.RecentSubId
+into #recentSub
+from #newaccountsavail as A
+left join #mostRecentSub as B on A.UserId=B.UserId
+
+--analysis of users who have closed subs --
+--looks at date of sub closure--
+drop table if exists #closedusers
+select *
+into #closedusers from #currentsubstatus
+where subscriptionStatus in (5,6)
+
+select A.UserId,B.AccessToken
+from #closedusers as A
+left join InstitutionAccount as B on A.UserId=B.UserId
+
+select a.userid,a.recentsubid,b.subscriptionstatus, convert(varchar(7), b.ModifiedAt , 23) as subModifiedAt 
+from #closedusers as A
+left join usersubscription as b on a.recentsubid=b.usersubscriptionid
+
+--to see if change was made in L14d (since script)--
+drop table if exists #sub_change
+select 
+distinct c.recentsubid
+, b.PastSubscriptionStatus 
+, b.StatusChangedAtUtc as status_change_date
+, a.startDate as sub_start_date
+, a.endDate as sub_end_date
+, a.subscriptionStatus 
+,  case when PastSubscriptionStatus  = 0 then 'None'
+when PastSubscriptionStatus  = 1 then 'Active'
+when PastSubscriptionStatus  = 2 then 'Overdue'
+when PastSubscriptionStatus  = 3 then 'Canceled'
+when PastSubscriptionStatus  = 4 then 'Delinquent'
+when PastSubscriptionStatus  = 5 then 'Closed by User'
+when PastSubscriptionStatus  = 6 then 'Closed by Empower'
+when PastSubscriptionStatus  = 7 then 'Pending Payment'
+when PastSubscriptionStatus  = 8 then 'Trial Autoclose'
+when PastSubscriptionStatus  = 9 then 'Subscription Paused'
+end as past_subscriptionStatus
+, case when a.subscriptionStatus = 0 then 'None'
+when a.subscriptionStatus = 1 then 'Active'
+when a.subscriptionStatus = 2 then 'Overdue'
+when a.subscriptionStatus = 3 then 'Canceled'
+when a.subscriptionStatus = 4 then 'Delinquent'
+when a.subscriptionStatus = 5 then 'Closed by User'
+when a.subscriptionStatus = 6 then 'Closed by Empower'
+when a.subscriptionStatus = 7 then 'Pending Payment'
+when a.subscriptionStatus = 8 then 'Trial Autoclose'
+when a.subscriptionStatus = 9 then 'Subscription Paused'
+end as current_subscriptionStatus
+into #sub_change
+from #closedUsers as C
+left join UserSubscriptionStatusChange b on b.usersubscriptionid=c.recentsubid
+left join [UserSubscription] a 
+on b.userSubscriptionId = a.userSubscriptionId
+where 1=1 
+and datediff(day,b.StatusChangedAtUtc,GETDATE())<=14
